@@ -11,17 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { UseProjectDialogsReturn } from "@/hooks/use-project-dialogs"
-
-function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-  return slug || "…"
-}
+import { UseProjectActionsReturn } from "@/hooks/use-project-actions"
 
 export function ProjectDialogs({
   dialogType,
@@ -29,11 +19,12 @@ export function ProjectDialogs({
   name,
   setName,
   isLoading,
+  roomIdPreview,
   close,
   handleCreate,
   handleRename,
   handleDelete,
-}: UseProjectDialogsReturn) {
+}: UseProjectActionsReturn) {
   const handleDialogOpenChange = (open: boolean) => {
     if (!open && isLoading) return
     if (!open) close()
@@ -61,12 +52,17 @@ export function ProjectDialogs({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && name.trim()) handleCreate()
+                }}
                 placeholder="My Project"
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Slug:{" "}
-              <span className="font-mono text-foreground/70">{slugify(name)}</span>
+              Room ID:{" "}
+              <span className="font-mono text-foreground/70">
+                {roomIdPreview || "…"}
+              </span>
             </p>
           </div>
 
