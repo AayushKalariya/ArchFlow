@@ -10,14 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { MOCK_PROJECTS, type MockProject } from "@/lib/mock-projects"
+import type { Project } from "@/lib/projects"
 
 interface ProjectSidebarProps {
   isOpen: boolean
   onClose: () => void
+  ownedProjects: Project[]
+  sharedProjects: Project[]
   onCreateProject: () => void
-  onRenameProject: (project: MockProject) => void
-  onDeleteProject: (project: MockProject) => void
+  onRenameProject: (project: Project) => void
+  onDeleteProject: (project: Project) => void
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -34,9 +36,9 @@ function ProjectItem({
   onRename,
   onDelete,
 }: {
-  project: MockProject
-  onRename: (p: MockProject) => void
-  onDelete: (p: MockProject) => void
+  project: Project
+  onRename: (p: Project) => void
+  onDelete: (p: Project) => void
 }) {
   return (
     <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/50 cursor-pointer">
@@ -73,12 +75,11 @@ function ProjectItem({
   )
 }
 
-const myProjects = MOCK_PROJECTS.filter((p) => p.isOwner)
-const sharedProjects = MOCK_PROJECTS.filter((p) => !p.isOwner)
-
 export function ProjectSidebar({
   isOpen,
   onClose,
+  ownedProjects,
+  sharedProjects,
   onCreateProject,
   onRenameProject,
   onDeleteProject,
@@ -121,11 +122,11 @@ export function ProjectSidebar({
             </TabsList>
 
             <TabsContent value="mine" className="mt-3 flex-1 overflow-y-auto">
-              {myProjects.length === 0 ? (
+              {ownedProjects.length === 0 ? (
                 <EmptyState label="projects" />
               ) : (
                 <div className="flex flex-col gap-0.5">
-                  {myProjects.map((p) => (
+                  {ownedProjects.map((p) => (
                     <ProjectItem
                       key={p.id}
                       project={p}
