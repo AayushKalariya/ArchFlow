@@ -1,6 +1,7 @@
 "use client"
 
 import { X, Plus, FolderOpen, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -20,6 +21,7 @@ interface ProjectSidebarProps {
   onCreateProject: () => void
   onRenameProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
+  activeProjectId?: string
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -33,16 +35,30 @@ function EmptyState({ label }: { label: string }) {
 
 function ProjectItem({
   project,
+  isActive,
   onRename,
   onDelete,
 }: {
   project: Project
+  isActive: boolean
   onRename: (p: Project) => void
   onDelete: (p: Project) => void
 }) {
   return (
-    <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/50 cursor-pointer">
-      <span className="flex-1 truncate">{project.name}</span>
+    <div
+      className={[
+        "group flex items-center rounded-xl text-sm",
+        isActive
+          ? "bg-accent-primary-dim text-text-primary"
+          : "text-foreground hover:bg-muted/50",
+      ].join(" ")}
+    >
+      <Link
+        href={`/editor/${project.id}`}
+        className="flex-1 truncate px-2 py-1.5"
+      >
+        {project.name}
+      </Link>
       {project.isOwner && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -50,8 +66,7 @@ function ProjectItem({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               />
             }
           >
@@ -59,12 +74,12 @@ function ProjectItem({
             <span className="sr-only">Project actions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={() => onRename(project)}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(project); }}>
               <Pencil className="size-4" />
               Rename
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => onDelete(project)}>
+            <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); onDelete(project); }}>
               <Trash2 className="size-4" />
               Delete
             </DropdownMenuItem>
@@ -83,6 +98,7 @@ export function ProjectSidebar({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
+  activeProjectId,
 }: ProjectSidebarProps) {
   return (
     <>
@@ -130,6 +146,7 @@ export function ProjectSidebar({
                     <ProjectItem
                       key={p.id}
                       project={p}
+                      isActive={p.id === activeProjectId}
                       onRename={onRenameProject}
                       onDelete={onDeleteProject}
                     />
@@ -147,6 +164,7 @@ export function ProjectSidebar({
                     <ProjectItem
                       key={p.id}
                       project={p}
+                      isActive={p.id === activeProjectId}
                       onRename={onRenameProject}
                       onDelete={onDeleteProject}
                     />

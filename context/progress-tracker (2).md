@@ -21,6 +21,10 @@ Update this file whenever the current phase, active feature, or implementation s
 - **06-project-apis**: REST API routes for project management. `GET /api/projects` lists authenticated user's projects. `POST /api/projects` creates project (defaults name to "Untitled Project"). `PATCH /api/projects/[projectId]` renames (owner-only). `DELETE /api/projects/[projectId]` deletes (owner-only). All routes return 401 for unauthenticated requests; PATCH/DELETE return 403 for non-owners. Uses Prisma v8 ORM (`prisma.orm.public.Project`). `npm run build` passes.
 - **07-wire-editor-home**: Editor home wired to real project API. `lib/projects.ts` exports `Project` type and `getOwnedProjects()` server helper. `hooks/use-project-actions.ts` manages dialog state + mutations: create (POST → navigate to `/editor/[id]`), rename (PATCH → refresh), delete (DELETE → redirect if active else refresh). `app/editor/page.tsx` converted to server component — fetches owned projects, passes to `EditorHome` client wrapper. `components/editor/editor-home.tsx` extracted as client component. `ProjectSidebar` accepts `ownedProjects`/`sharedProjects` arrays (real `Project[]`, not mock). `ProjectDialogs` updated to `UseProjectActionsReturn`, create dialog shows live room ID preview (slug + random suffix). `hooks/use-project-dialogs.ts` deleted.
 
+- **08-editor-workspace-shell**: `/editor/[projectId]` converted to full server-side access-checked workspace. `lib/project-access.ts` exports `getCurrentUser()` (Clerk identity: userId + primary email) and `checkProjectAccess(projectId, ownerId, cu)` (owner or collaborator). `components/editor/access-denied.tsx` — centered lock icon, message, link to `/editor`. `components/editor/workspace-shell.tsx` — client shell managing sidebar + AI sidebar state; renders `EditorNavbar` (project name, share placeholder, AI toggle), `ProjectSidebar` (active room highlighted, click-to-navigate), central canvas placeholder, collapsible right AI sidebar placeholder. `EditorNavbar` extended with optional `projectName`, `onShare`, `aiSidebarOpen`, `onAiToggle` props. `ProjectSidebar` extended with optional `activeProjectId` (highlights active item) and per-item click navigation via `router.push`. Unauthenticated → redirect `/sign-in`. Missing/unauthorized project → `AccessDenied`. `npm run build` passes.
+
+- **09-sharing**: Share dialog on workspace. `GET/POST /api/projects/[projectId]/collaborators` — list (owner or collaborator, enriched with Clerk display name + avatar via `clerkClient().users.getUserList`) and invite (owner only, 409 on duplicate). `DELETE /api/projects/[projectId]/collaborators/[collaboratorId]` — remove (owner only). `components/editor/share-dialog.tsx` — invite input + collaborator list with avatars/names, remove buttons (owner), read-only list (collaborator), copy link with "Copied!" feedback. `isOwner` computed in workspace page (`cu.userId === project.ownerId`) and passed through `WorkspaceShell`. `npm run build` passes.
+
 ## In Progress
 
 - None.
@@ -32,7 +36,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- Canvas workspace layout
+- Canvas implementation (Liveblocks + React Flow)
 
 ## Open Questions
 

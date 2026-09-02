@@ -1,6 +1,9 @@
-import { notFound } from "next/navigation"
-import { auth } from "@clerk/nextjs/server"
+import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { getCurrentUser, checkProjectAccess } from "@/lib/project-access"
+import { getOwnedProjects, getSharedProjects } from "@/lib/projects"
+import { AccessDenied } from "@/components/editor/access-denied"
+import { WorkspaceShell } from "@/components/editor/workspace-shell"
 
 interface WorkspacePageProps {
   params: Promise<{ projectId: string }>
@@ -8,23 +11,27 @@ interface WorkspacePageProps {
 
 export default async function WorkspacePage({ params }: WorkspacePageProps) {
   const { projectId } = await params
-  const { userId } = await auth()
-  if (!userId) return null
 
-  const project = await prisma.orm.public.Project
-    .where({ id: projectId })
-    .first()
+  const cu = await getCurrentUser()
+  if (!cu) redirect("/sign-in")
 
-  if (!project) notFound()
+  const project = await prisma.orm.public.Project.first({ id: projectId })
+  if (!project) return <AccessDenied />
+
+  const hasAccess = await checkProjectAccess(projectId, project.ownerId, cu)
+  if (!hasAccess) return <AccessDenied />
+
+  const [ownedProjects, sharedProjects] = await Promise.all([
+    getOwnedProjects(),
+    getSharedProjects(),
+  ])
 
   return (
-    <div className="flex flex-col h-screen bg-bg-canvas">
-      <header className="fixed top-0 inset-x-0 z-40 h-12 flex items-center px-4 bg-bg-surface border-b border-border-default">
-        <span className="text-sm font-medium text-text-primary">{project.name}</span>
-      </header>
-      <main className="flex flex-1 items-center justify-center mt-12 text-text-muted text-sm">
-        Canvas coming soon
-      </main>
-    </div>
+    <WorkspaceShell
+      project={{ id: project.id, name: project.name }}
+      isOwner={cu.userId === project.ownerId}
+      ownedProjects={ownedProjects}
+      sharedProjects={sharedProjects}
+    />
   )
 }

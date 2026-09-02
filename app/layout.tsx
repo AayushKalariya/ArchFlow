@@ -55,6 +55,11 @@ const clerkAppearance = {
     userButtonPopoverActionButtonText: { color: "#f0f0f4" },
     userButtonPopoverActionButtonIcon: { color: "#c0c0cc" },
     userButtonPopoverFooter: { display: "none" },
+    badge: { color: "#f0f0f4" },
+    formFieldHintText: { color: "#c0c0cc" },
+    formFieldInfoText: { color: "#c0c0cc" },
+    formFieldMessage: { color: "#c0c0cc" },
+    formFieldErrorText: { color: "#ff4d4f" },
   },
 };
 
