@@ -1,6 +1,7 @@
 "use client"
 
 import { X, Plus, FolderOpen, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -20,6 +21,7 @@ interface ProjectSidebarProps {
   onCreateProject: () => void
   onRenameProject: (project: Project) => void
   onDeleteProject: (project: Project) => void
+  activeProjectId?: string
 }
 
 function EmptyState({ label }: { label: string }) {
@@ -33,15 +35,27 @@ function EmptyState({ label }: { label: string }) {
 
 function ProjectItem({
   project,
+  isActive,
   onRename,
   onDelete,
 }: {
   project: Project
+  isActive: boolean
   onRename: (p: Project) => void
   onDelete: (p: Project) => void
 }) {
+  const router = useRouter()
+
   return (
-    <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted/50 cursor-pointer">
+    <div
+      className={[
+        "group flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm cursor-pointer",
+        isActive
+          ? "bg-accent-primary-dim text-text-primary"
+          : "text-foreground hover:bg-muted/50",
+      ].join(" ")}
+      onClick={() => router.push(`/editor/${project.id}`)}
+    >
       <span className="flex-1 truncate">{project.name}</span>
       {project.isOwner && (
         <DropdownMenu>
@@ -83,6 +97,7 @@ export function ProjectSidebar({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
+  activeProjectId,
 }: ProjectSidebarProps) {
   return (
     <>
@@ -130,6 +145,7 @@ export function ProjectSidebar({
                     <ProjectItem
                       key={p.id}
                       project={p}
+                      isActive={p.id === activeProjectId}
                       onRename={onRenameProject}
                       onDelete={onDeleteProject}
                     />
@@ -147,6 +163,7 @@ export function ProjectSidebar({
                     <ProjectItem
                       key={p.id}
                       project={p}
+                      isActive={p.id === activeProjectId}
                       onRename={onRenameProject}
                       onDelete={onDeleteProject}
                     />

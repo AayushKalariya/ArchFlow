@@ -134,3 +134,33 @@
         @apply font-sans;
     }
 }
+
+/* Clerk hint / error / message text overrides */
+.cl-formFieldHintText,
+.cl-formFieldInfoText,
+.cl-formFieldMessage,
+[class*="cl-formField"] p,
+[class*="cl-formField"] span:not(input) {
+    color: #c0c0cc !important;
+}
+.cl-formFieldErrorText,
+.cl-formFieldErrorMessage {
+    color: #ff4d4f !important;
+}
+
+/* Clerk badge ("Last used") override */
+.cl-badge {
+    color: #f0f0f4 !important;
+}
+
+/* Clerk input text / placeholder overrides */
+.cl-formFieldInput,
+.cl-otpCodeFieldInput {
+    color: #f0f0f4 !important;
+}
+
+.cl-formFieldInput::placeholder,
+.cl-otpCodeFieldInput::placeholder {
+    color: #505060 !important;
+    opacity: 1 !important;
+}
