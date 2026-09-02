@@ -32,14 +32,22 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 
   const emails = collabs.map((c) => c.email);
   const clerk = await clerkClient();
-  const { data: clerkUsers } = await clerk.users.getUserList({
-    emailAddress: emails,
-    limit: 100,
-  });
+  const BATCH = 100;
+  const allClerkUsers = [];
+  for (let i = 0; i < emails.length; i += BATCH) {
+    const { data } = await clerk.users.getUserList({
+      emailAddress: emails.slice(i, i + BATCH),
+      limit: BATCH,
+    });
+    allClerkUsers.push(...data);
+  }
 
-  const userMap = new Map(
-    clerkUsers.map((u) => [u.primaryEmailAddress?.emailAddress, u])
-  );
+  const userMap = new Map<string, (typeof allClerkUsers)[number]>();
+  for (const u of allClerkUsers) {
+    for (const ea of u.emailAddresses) {
+      userMap.set(ea.emailAddress, u);
+    }
+  }
 
   const result = collabs.map((c) => {
     const cu = userMap.get(c.email);

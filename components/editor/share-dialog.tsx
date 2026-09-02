@@ -53,7 +53,6 @@ export function ShareDialog({
 
   useEffect(() => {
     if (open) {
-      setError(null)
       fetchCollaborators()
     }
   }, [open, fetchCollaborators])
@@ -104,7 +103,7 @@ export function ShareDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (isOpen) setError(null); onOpenChange(isOpen); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Share project</DialogTitle>

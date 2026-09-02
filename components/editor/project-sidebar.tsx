@@ -1,7 +1,7 @@
 "use client"
 
 import { X, Plus, FolderOpen, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -44,19 +44,21 @@ function ProjectItem({
   onRename: (p: Project) => void
   onDelete: (p: Project) => void
 }) {
-  const router = useRouter()
-
   return (
     <div
       className={[
-        "group flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm cursor-pointer",
+        "group flex items-center rounded-xl text-sm",
         isActive
           ? "bg-accent-primary-dim text-text-primary"
           : "text-foreground hover:bg-muted/50",
       ].join(" ")}
-      onClick={() => router.push(`/editor/${project.id}`)}
     >
-      <span className="flex-1 truncate">{project.name}</span>
+      <Link
+        href={`/editor/${project.id}`}
+        className="flex-1 truncate px-2 py-1.5"
+      >
+        {project.name}
+      </Link>
       {project.isOwner && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -64,8 +66,7 @@ function ProjectItem({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               />
             }
           >
@@ -73,12 +74,12 @@ function ProjectItem({
             <span className="sr-only">Project actions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start">
-            <DropdownMenuItem onClick={() => onRename(project)}>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(project); }}>
               <Pencil className="size-4" />
               Rename
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => onDelete(project)}>
+            <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); onDelete(project); }}>
               <Trash2 className="size-4" />
               Delete
             </DropdownMenuItem>

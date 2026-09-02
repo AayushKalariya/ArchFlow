@@ -19,7 +19,7 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
-  const actions = useProjectActions()
+  const actions = useProjectActions(project.id)
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-bg-base">
