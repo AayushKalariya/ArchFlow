@@ -5,6 +5,7 @@ import { EditorNavbar } from "@/components/editor/editor-navbar"
 import { ProjectSidebar } from "@/components/editor/project-sidebar"
 import { ProjectDialogs } from "@/components/editor/project-dialogs"
 import { ShareDialog } from "@/components/editor/share-dialog"
+import { CanvasWrapper } from "@/components/editor/canvas-wrapper"
 import { useProjectActions } from "@/hooks/use-project-actions"
 import type { Project } from "@/lib/projects"
 
@@ -44,8 +45,8 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
       />
 
       <div className="flex flex-1 mt-12 overflow-hidden">
-        <main className="flex flex-1 items-center justify-center bg-bg-base">
-          <span className="text-sm text-text-muted">Canvas coming soon</span>
+        <main className="flex-1 relative overflow-hidden bg-bg-base">
+          <CanvasWrapper roomId={project.id} />
         </main>
 
         {aiSidebarOpen && (

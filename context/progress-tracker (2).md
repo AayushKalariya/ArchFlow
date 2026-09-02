@@ -25,6 +25,12 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - **09-sharing**: Share dialog on workspace. `GET/POST /api/projects/[projectId]/collaborators` — list (owner or collaborator, enriched with Clerk display name + avatar via `clerkClient().users.getUserList`) and invite (owner only, 409 on duplicate). `DELETE /api/projects/[projectId]/collaborators/[collaboratorId]` — remove (owner only). `components/editor/share-dialog.tsx` — invite input + collaborator list with avatars/names, remove buttons (owner), read-only list (collaborator), copy link with "Copied!" feedback. `isOwner` computed in workspace page (`cu.userId === project.ownerId`) and passed through `WorkspaceShell`. `npm run build` passes.
 
+- **10-liveblocks**: Realtime collaboration infrastructure. `liveblocks.config.ts` defines `Presence` (cursor `{x,y}|null`, `isThinking` boolean) and `UserMeta` (id, info: name/avatar/color). `lib/liveblocks.ts` exports `getLiveblocks()` (lazy-cached `Liveblocks` node client) and `getCursorColor(userId)` (deterministic color from 10-color palette via hash). `POST /api/liveblocks-auth` requires Clerk auth, verifies project access via `checkProjectAccess`, calls `getOrCreateRoom(projectId)`, returns session token with name/avatar/cursor color. Installed `@liveblocks/node`. `npm run build` passes.
+
+- **11-canvas**: Liveblocks-backed React Flow collaborative canvas. `types/canvas.ts` defines `CanvasNodeData` (label/color/shape), `CanvasNode` (`canvasNode` type), `CanvasEdge` (`canvasEdge` type), `NODE_COLORS` (8 dark fill/text pairs from ui-context), `NODE_SHAPES` (6 shapes). `liveblocks.config.ts` updated: `Storage` now types `flow` as `LiveblocksFlow<CanvasNode, CanvasEdge>`. `components/editor/canvas-wrapper.tsx` — client wrapper: `ErrorBoundary` (class component), `LiveblocksProvider` (auth `/api/liveblocks-auth`), `RoomProvider` (roomId + initial presence + `initialStorage` seeding empty nodes/edges `LiveMap`s), `ClientSideSuspense` with loading fallback. `components/editor/canvas.tsx` — `useLiveblocksFlow({ suspense: true })` wired into `ReactFlow` with `connectOnClick`, `fitView`, dot-pattern `Background`, `MiniMap`. `WorkspaceShell` `main` section replaced with `<CanvasWrapper roomId={project.id} />`. `npm run build` passes.
+
+- **12-panel**: Bottom shape panel for dragging nodes onto the canvas. `components/editor/shape-panel.tsx` — floating pill toolbar at bottom-center (via React Flow `Panel`); 6 shape buttons (rectangle, diamond, circle, pill, cylinder, hexagon) with Lucide icons; `onDragStart` sets `application/ghost-shape` data-transfer payload with `{ shape, width, height }` (sensible defaults: rectangle 160×80, diamond 140×140, circle 100×100, pill 160×60, cylinder 100×80, hexagon 120×120). `components/editor/canvas-node.tsx` — `CanvasNodeRenderer` custom node: simple bordered rectangle (`rounded-xl border-border-subtle`) filled with `data.color`, centered label, `Handle`s on all 4 sides hidden by default and revealed on group-hover. `canvas.tsx` restructured: split into `CanvasFlow` (inner, uses `useReactFlow`) + `Canvas` (wraps in explicit `ReactFlowProvider` so `screenToFlowPosition` is available at that level); `onDragOver`/`onDrop` on `ReactFlow` component; drop handler reads payload, calls `screenToFlowPosition`, creates `CanvasNode` with ID `{shape}-{timestamp}-{counter}` and empty label + default color; node added via `useMutation` → `storage.flow.nodes.set`. `nodeTypes` map registers `canvasNode` → `CanvasNodeRenderer`. `npm run build` passes.
+
 ## In Progress
 
 - None.
@@ -36,7 +42,9 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- Canvas implementation (Liveblocks + React Flow)
+- Shape-specific visuals (diamond SVG clip, hexagon clip, cylinder arc, pill border-radius)
+- Node color + label editing (click to select color, double-click to edit label)
+- AI sidebar integration
 
 ## Open Questions
 

@@ -135,6 +135,12 @@
     }
 }
 
+/* React Flow — reveal handles on valid drop targets during connection drag */
+.react-flow__handle.react-flow__handle-valid,
+.react-flow__handle.react-flow__handle-connecting {
+  opacity: 1 !important;
+}
+
 /* Clerk hint / error / message text overrides */
 .cl-formFieldHintText,
 .cl-formFieldInfoText,
