@@ -21,11 +21,12 @@ class ErrorBoundary extends Component<
 
 interface CanvasWrapperProps {
   roomId: string
+  projectId: string
   pendingTemplate?: PendingTemplate | null
   onTemplateDone?: () => void
 }
 
-export function CanvasWrapper({ roomId, pendingTemplate, onTemplateDone }: CanvasWrapperProps) {
+export function CanvasWrapper({ roomId, projectId, pendingTemplate, onTemplateDone }: CanvasWrapperProps) {
   return (
     <ErrorBoundary
       fallback={
@@ -37,7 +38,7 @@ export function CanvasWrapper({ roomId, pendingTemplate, onTemplateDone }: Canva
       <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
         <RoomProvider
           id={roomId}
-          initialPresence={{ cursor: null, isThinking: false }}
+          initialPresence={{ cursor: null, thinking: false }}
           initialStorage={() => ({
             flow: new LiveObject({
               nodes: new LiveMap(),
@@ -52,7 +53,7 @@ export function CanvasWrapper({ roomId, pendingTemplate, onTemplateDone }: Canva
               </div>
             }
           >
-            <Canvas pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
+            <Canvas projectId={projectId} pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>

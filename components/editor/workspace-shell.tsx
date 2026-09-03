@@ -7,6 +7,7 @@ import { ProjectDialogs } from "@/components/editor/project-dialogs"
 import { ShareDialog } from "@/components/editor/share-dialog"
 import { CanvasWrapper } from "@/components/editor/canvas-wrapper"
 import { StarterTemplatesModal } from "@/components/editor/starter-templates-modal"
+import { AiSidebar } from "@/components/editor/ai-sidebar"
 import { useProjectActions } from "@/hooks/use-project-actions"
 import type { Project } from "@/lib/projects"
 import type { CanvasTemplate, PendingTemplate } from "@/components/editor/starter-templates"
@@ -57,22 +58,14 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
         <main className="flex-1 relative overflow-hidden bg-bg-base">
           <CanvasWrapper
             roomId={project.id}
+            projectId={project.id}
             pendingTemplate={pendingTemplate}
             onTemplateDone={() => setPendingTemplate(null)}
           />
         </main>
-
-        {aiSidebarOpen && (
-          <aside className="w-80 shrink-0 border-l border-border-default bg-bg-surface flex flex-col">
-            <div className="flex items-center px-4 h-12 border-b border-border-default shrink-0">
-              <span className="text-sm font-medium text-text-primary">AI Assistant</span>
-            </div>
-            <div className="flex flex-1 items-center justify-center p-4">
-              <span className="text-sm text-text-muted text-center">AI chat coming soon</span>
-            </div>
-          </aside>
-        )}
       </div>
+
+      <AiSidebar isOpen={aiSidebarOpen} onClose={() => setAiSidebarOpen(false)} />
 
       <ProjectDialogs {...actions} />
       <StarterTemplatesModal
