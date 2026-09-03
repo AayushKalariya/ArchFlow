@@ -5,6 +5,7 @@ export type NodeShape = "rectangle" | "diamond" | "circle" | "pill" | "cylinder"
 export interface CanvasNodeData extends Record<string, unknown> {
   label: string
   color: string
+  textColor?: string
   shape: NodeShape
 }
 

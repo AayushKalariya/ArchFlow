@@ -31,9 +31,21 @@ Update this file whenever the current phase, active feature, or implementation s
 
 - **12-panel**: Bottom shape panel for dragging nodes onto the canvas. `components/editor/shape-panel.tsx` — floating pill toolbar at bottom-center (via React Flow `Panel`); 6 shape buttons (rectangle, diamond, circle, pill, cylinder, hexagon) with Lucide icons; `onDragStart` sets `application/ghost-shape` data-transfer payload with `{ shape, width, height }` (sensible defaults: rectangle 160×80, diamond 140×140, circle 100×100, pill 160×60, cylinder 100×80, hexagon 120×120). `components/editor/canvas-node.tsx` — `CanvasNodeRenderer` custom node: simple bordered rectangle (`rounded-xl border-border-subtle`) filled with `data.color`, centered label, `Handle`s on all 4 sides hidden by default and revealed on group-hover. `canvas.tsx` restructured: split into `CanvasFlow` (inner, uses `useReactFlow`) + `Canvas` (wraps in explicit `ReactFlowProvider` so `screenToFlowPosition` is available at that level); `onDragOver`/`onDrop` on `ReactFlow` component; drop handler reads payload, calls `screenToFlowPosition`, creates `CanvasNode` with ID `{shape}-{timestamp}-{counter}` and empty label + default color; node added via `useMutation` → `storage.flow.nodes.set`. `nodeTypes` map registers `canvasNode` → `CanvasNodeRenderer`. `npm run build` passes.
 
+- **13-nodeshape**: Proper shape rendering + drag ghost preview. `canvas-node.tsx`: exports `NodeShapeBody` — CSS shapes (`rectangle` `rounded-xl`, `pill`/`circle` `rounded-full`) and SVG shapes (diamond/hexagon via `<polygon>`, cylinder via rect + ellipses + arc path). Border uses `--border-subtle` at rest, `--accent-primary` when selected; both scale with node `width`/`height`. `shape-panel.tsx`: on drag, native ghost suppressed via `setDragImage` on a hidden element; `document` `dragover`/`dragend` listeners (wired in `useEffect`, tracked via ref) update cursor position; fixed-position `NodeShapeBody` preview follows cursor at 75% opacity; cleared on `dragend`. `npm run build` passes.
+
 ## In Progress
 
 - None.
+
+## Completed (continued)
+
+- **14-editnode**: Resize handles + inline label editing on canvas nodes. `canvas-node.tsx`: added `NodeResizer` (visible when selected, min 60×40, accent-primary handles + dashed border line); added local `editing`/`labelValue` state + `useMutation` to write updated `data.label` back into Liveblocks storage; double-click enters edit mode, blur saves, Escape reverts; textarea `onMouseDown`/`onPointerDown` stop-propagation to prevent canvas drag/pan during text input; placeholder ("Label…") shown at 30% opacity when label is empty. `npm run build` passes.
+
+- **15-colored-nodes**: Floating color toolbar on selected nodes. `types/canvas.ts`: added optional `textColor` field to `CanvasNodeData`. `canvas-node.tsx`: `ColorToolbar` component — 8 circular swatches (one per `NODE_COLORS` pair), positioned `calc(100% + 8px)` above the node, centered; active swatch shows text-color border + outer ring; hover shows tight text-color glow (`0 0 5px 2px`); `onMouseDown`/`onPointerDown`/`onClick` stop propagation to prevent drag/pan. `updateColor` mutation writes both `color` (fill) and `textColor` into Liveblocks storage. Label and textarea use `data.textColor ?? "#EDEDED"` so color updates instantly across collaborators. `npm run build` passes.
+
+- **16-canvas-behavior**: Floating control bar + keyboard shortcuts. `components/editor/canvas-controls.tsx` — pill-shaped bar at bottom-left (via React Flow `Panel`); zoom out/fit view/zoom in wired to `useReactFlow()` with 300ms animation; thin divider; undo/redo buttons wired to `useUndo`/`useRedo` (Liveblocks), disabled + dimmed when `useCanUndo`/`useCanRedo` are false. `hooks/useKeyboardShortcuts.ts` — receives ReactFlowInstance, undo, redo; listens on `window`; skips input/textarea/contenteditable targets; handles `+`/`=` zoom in, `-` zoom out, `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` redo, `Ctrl/Cmd+Y` redo. MiniMap removed from canvas. `npm run build` passes.
+
+- **17-premade-options**: Starter template library. `components/editor/starter-templates.ts` — `CanvasTemplate` + `PendingTemplate` types; `CANVAS_TEMPLATES` array with three templates (Microservices, CI/CD Pipeline, Event-Driven System) using shared `CanvasNode`/`CanvasEdge` types and `NODE_COLORS`. `components/editor/starter-templates-modal.tsx` — `StarterTemplatesModal` dialog (Base UI) with scrollable grid of template cards; `TemplatePreview` SVG component that fits template bounds to a 276×144 viewport, draws dashed edges as lines between node centers, draws nodes using their shape and color (rectangles, rounded rects, diamonds, hexagons, circles). `canvas.tsx`: added `importTemplate` Liveblocks mutation (clears all nodes+edges, writes template data); `useEffect` on `PendingTemplate.stamp` applies mutation + `fitView` with 400ms animation. `PendingTemplate` prop threaded through `CanvasWrapper` → `Canvas` → `CanvasFlow`. `editor-navbar.tsx`: `LayoutTemplate` icon button (`onTemplates` prop). `workspace-shell.tsx`: `templatesOpen` + `pendingTemplate` state; `handleImportTemplate` stamps `Date.now()` to guarantee effect re-fires for re-imports. `npm run build` passes.
 
 ## Fixes
 
@@ -42,8 +54,6 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- Shape-specific visuals (diamond SVG clip, hexagon clip, cylinder arc, pill border-radius)
-- Node color + label editing (click to select color, double-click to edit label)
 - AI sidebar integration
 
 ## Open Questions

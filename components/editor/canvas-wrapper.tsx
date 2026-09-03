@@ -4,6 +4,7 @@ import { Component, type ReactNode } from "react"
 import { LiveblocksProvider, RoomProvider, ClientSideSuspense } from "@liveblocks/react"
 import { LiveObject, LiveMap } from "@liveblocks/client"
 import { Canvas } from "./canvas"
+import type { PendingTemplate } from "./starter-templates"
 
 class ErrorBoundary extends Component<
   { fallback: ReactNode; children: ReactNode },
@@ -20,9 +21,11 @@ class ErrorBoundary extends Component<
 
 interface CanvasWrapperProps {
   roomId: string
+  pendingTemplate?: PendingTemplate | null
+  onTemplateDone?: () => void
 }
 
-export function CanvasWrapper({ roomId }: CanvasWrapperProps) {
+export function CanvasWrapper({ roomId, pendingTemplate, onTemplateDone }: CanvasWrapperProps) {
   return (
     <ErrorBoundary
       fallback={
@@ -49,7 +52,7 @@ export function CanvasWrapper({ roomId }: CanvasWrapperProps) {
               </div>
             }
           >
-            <Canvas />
+            <Canvas pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
           </ClientSideSuspense>
         </RoomProvider>
       </LiveblocksProvider>
