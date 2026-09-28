@@ -53,6 +53,8 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Fixes
 
+- **vercel-prisma-contract-build**: Pinned the working Prisma 8 runtime (`@prisma/orm-postgres` 8.0.0-rc.8), CLI (`prisma` 8.0.0-rc.12), and Node.js 24, added an npm lockfile for repeatable Vercel installs, and added `prebuild: prisma contract emit` so the generated contract matches the installed runtime before Next.js type checking. Moved `prisma skills sync` from every install to an explicit `skills:sync` script. Verified with a clean `npm ci` followed by `npm run build`; the production build passed.
+
 - **generate-spec-slow-import**: `src/trigger/generate-spec.ts` now loads the AI provider and text generation modules when the task runs, then loads Vercel Blob and Prisma only when saving the generated spec. The task definition and Zod schema remain available for Trigger.dev discovery without eagerly initializing these heavier dependencies. TypeScript and focused ESLint checks pass; Trigger.dev 4.6.4 dry-run build succeeds and its generated task entry is 6 KB with the heavy modules in deferred chunks. The running dev session has not regenerated its earlier 1,559 ms timing yet.
 
 - **create-project-stale-list**: `useProjectActions.handleCreate` now calls `router.refresh()` before `router.push(/editor/[id])`. Without it the client Router Cache kept the pre-create (empty) RSC payload for `/editor`, so a new project was missing from "My Projects" on back-navigation. `handleRename`/`handleDelete` already did this.
