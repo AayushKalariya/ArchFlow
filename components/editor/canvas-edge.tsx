@@ -14,7 +14,7 @@ export function CanvasEdgeRenderer({
   markerEnd,
   style,
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -22,6 +22,12 @@ export function CanvasEdgeRenderer({
     targetY,
     targetPosition,
   })
+
+  // Geometric midpoint of the endpoints — keeps the label centered between the
+  // two nodes rather than skewed toward an end as getBezierPath's labelX/Y does
+  // on sharply curved edges.
+  const labelX = (sourceX + targetX) / 2
+  const labelY = (sourceY + targetY) / 2
 
   return (
     <>

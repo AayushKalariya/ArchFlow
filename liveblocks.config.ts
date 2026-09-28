@@ -21,9 +21,17 @@ declare global {
       };
     };
 
-    RoomEvent: {};
+    RoomEvent: {
+      type: "ai-status";
+      status: "processing" | "complete" | "error";
+      message: string;
+    };
 
     ThreadMetadata: {};
+
+    FeedMessageData:
+      | { status: "processing" | "complete" | "error"; text?: string }
+      | { chatMessage: true; sender: string; senderName: string; content: string; timestamp: number; role?: "user" | "assistant" };
 
     RoomInfo: {};
   }

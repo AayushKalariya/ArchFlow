@@ -7,6 +7,7 @@ model Project {
   id             String        @id @default(uuid())
   ownerId        String
   name           String
+  slug           String?       @unique
   description    String?
   status         ProjectStatus @default(DRAFT)
   canvasJsonPath String?
@@ -14,6 +15,7 @@ model Project {
   updatedAt      DateTime         @default(now())
 
   collaborators ProjectCollaborator[]
+  specs         ProjectSpec[]
 
   @@index([ownerId])
   @@index([createdAt])
@@ -30,4 +32,26 @@ model ProjectCollaborator {
   @@unique([projectId, email])
   @@index([email])
   @@index([projectId, createdAt])
+}
+
+model TaskRun {
+  id        String   @id @default(uuid())
+  runId     String   @unique
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([runId])
+  @@index([userId, projectId])
+}
+
+model ProjectSpec {
+  id        String   @id @default(uuid())
+  projectId String
+  filePath  String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

@@ -15,7 +15,9 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
   const cu = await getCurrentUser()
   if (!cu) redirect("/sign-in")
 
-  const project = await prisma.orm.public.Project.first({ id: projectId })
+  const project =
+    (await prisma.orm.public.Project.first({ slug: projectId })) ??
+    (await prisma.orm.public.Project.first({ id: projectId }))
   if (!project) return <AccessDenied />
 
   const hasAccess = await checkProjectAccess(projectId, project.ownerId, cu)

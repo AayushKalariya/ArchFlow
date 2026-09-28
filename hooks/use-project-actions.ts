@@ -69,10 +69,10 @@ export function useProjectActions(activeProjectId?: string) {
         body: JSON.stringify({ name: name.trim() }),
       })
       if (!res.ok) throw new Error("Failed to create project")
-      const project: { id: string } = await res.json()
+      const project: { id: string; slug?: string | null } = await res.json()
       close()
+      router.push(`/editor/${project.slug ?? project.id}`)
       router.refresh()
-      router.push(`/editor/${project.id}`)
     } catch (err) {
       console.error(err)
       setIsLoading(false)

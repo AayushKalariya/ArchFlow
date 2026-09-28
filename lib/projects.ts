@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 export interface Project {
   id: string
   name: string
+  slug: string | null
   isOwner: boolean
 }
 
@@ -16,7 +17,7 @@ export async function getOwnedProjects(): Promise<Project[]> {
     .orderBy((p) => p.createdAt.desc())
     .all()
 
-  return rows.map((p) => ({ id: p.id, name: p.name, isOwner: true }))
+  return rows.map((p) => ({ id: p.id, name: p.name, slug: p.slug ?? null, isOwner: true }))
 }
 
 export async function getSharedProjects(): Promise<Project[]> {
@@ -39,5 +40,5 @@ export async function getSharedProjects(): Promise<Project[]> {
 
   return projects
     .filter((p): p is NonNullable<typeof p> => !!p)
-    .map((p) => ({ id: p.id, name: p.name, isOwner: false }))
+    .map((p) => ({ id: p.id, name: p.name, slug: p.slug ?? null, isOwner: false }))
 }

@@ -1,0 +1,86 @@
+[
+  {
+    "id": "column.public.project.slug",
+    "label": "Add column \"slug\" to \"project\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "slug",
+        "table": "project"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"slug\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "project",
+          "slug"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"slug\"",
+        "sql": "ALTER TABLE \"public\".\"project\" ADD COLUMN \"slug\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"slug\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "project",
+          "slug"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.project.project_slug_key",
+    "label": "Add unique constraint on \"project\" (slug)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "project_slug_key",
+        "table": "project"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"project_slug_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "project_slug_key",
+          "public",
+          "\"public\".\"project\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"project_slug_key\"",
+        "sql": "ALTER TABLE \"public\".\"project\" ADD CONSTRAINT \"project_slug_key\" UNIQUE (\"slug\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"project_slug_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "project_slug_key",
+          "public",
+          "\"public\".\"project\""
+        ]
+      }
+    ]
+  }
+]

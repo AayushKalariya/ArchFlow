@@ -141,6 +141,11 @@
   opacity: 1 !important;
 }
 
+/* React Flow — keep edge labels above nodes so flow text isn't hidden behind blocks */
+.react-flow__edgelabel-renderer {
+  z-index: 1001 !important;
+}
+
 /* Clerk hint / error / message text overrides */
 .cl-formFieldHintText,
 .cl-formFieldInfoText,

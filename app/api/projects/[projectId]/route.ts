@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
+import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -47,6 +48,10 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
   }
   if (project.ownerId !== userId) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (project.canvasJsonPath) {
+    await del(project.canvasJsonPath);
   }
 
   await prisma.orm.public.Project.where({ id: projectId }).delete();

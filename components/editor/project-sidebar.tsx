@@ -54,7 +54,7 @@ function ProjectItem({
       ].join(" ")}
     >
       <Link
-        href={`/editor/${project.id}`}
+        href={`/editor/${project.slug ?? project.id}`}
         className="flex-1 truncate px-2 py-1.5"
       >
         {project.name}

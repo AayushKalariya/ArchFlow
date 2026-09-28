@@ -11,7 +11,7 @@ import {
   useViewport,
 } from "@xyflow/react"
 import { useLiveblocksFlow } from "@liveblocks/react-flow"
-import { useMutation, useUpdateMyPresence, useOthers } from "@liveblocks/react"
+import { useMutation, useUpdateMyPresence, useOthers, useEventListener } from "@liveblocks/react"
 import { LiveObject } from "@liveblocks/client"
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from "react"
 import type { CanvasNode, CanvasEdge } from "@/types/canvas"
@@ -31,7 +31,7 @@ let nodeCounter = 0
 
 // ── Live cursor for a single other participant ──────────────────────────────
 
-function LiveCursor({ x, y, name, color }: { x: number; y: number; name: string; color: string }) {
+function LiveCursor({ x, y, name, color, thinking }: { x: number; y: number; name: string; color: string; thinking?: boolean }) {
   const { x: vx, y: vy, zoom } = useViewport()
   const sx = x * zoom + vx
   const sy = y * zoom + vy
@@ -41,6 +41,12 @@ function LiveCursor({ x, y, name, color }: { x: number; y: number; name: string;
       className="absolute pointer-events-none"
       style={{ left: sx, top: sy, zIndex: 50 }}
     >
+      {thinking && (
+        <div
+          className="absolute -top-1 -left-1 w-5 h-5 rounded-full animate-ping opacity-60"
+          style={{ backgroundColor: color }}
+        />
+      )}
       <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           d="M0 0L0 15L4 11L7 17L9 16L6 10L11 10Z"
@@ -54,7 +60,7 @@ function LiveCursor({ x, y, name, color }: { x: number; y: number; name: string;
         className="mt-0.5 px-2 py-0.5 rounded-md text-xs font-medium text-white whitespace-nowrap"
         style={{ backgroundColor: color }}
       >
-        {name}
+        {name}{thinking ? "…" : ""}
       </div>
     </div>
   )
@@ -76,6 +82,7 @@ function LiveCursors() {
             y={other.presence.cursor.y}
             name={other.info?.name ?? "User"}
             color={other.info?.color ?? "#808090"}
+            thinking={other.presence.thinking}
           />
         )
       })}
@@ -98,6 +105,37 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
   const { screenToFlowPosition, fitView } = useReactFlow()
   const updateMyPresence = useUpdateMyPresence()
   const saveStatus = useCanvasAutosave(projectId, nodes, edges)
+  const [aiStatus, setAiStatus] = useState<string | null>(null)
+  const [pendingAiFit, setPendingAiFit] = useState(false)
+  const prevNodeCountRef = useRef(0)
+
+  useEventListener(({ event }) => {
+    if (event.type === "ai-status") {
+      setAiStatus(event.status === "complete" || event.status === "error" ? null : event.message)
+      if (event.status === "complete") {
+        setPendingAiFit(true)
+        setTimeout(() => fitView({ duration: 400 }), 300)
+      }
+    }
+  })
+
+  // Reactive fitView: fires when nodes appear after an AI run completes,
+  // covering the case where the storage delta arrives after the broadcastEvent.
+  useEffect(() => {
+    if (!pendingAiFit) return
+    if (nodes.length === 0) return
+    fitView({ duration: 400 })
+    setPendingAiFit(false)
+  }, [pendingAiFit, nodes.length, fitView])
+
+  // Also fit when nodes jump from 0 to >0 during an active AI run (status message showing).
+  useEffect(() => {
+    const prev = prevNodeCountRef.current
+    prevNodeCountRef.current = nodes.length
+    if (prev === 0 && nodes.length > 0 && aiStatus !== null) {
+      fitView({ duration: 400 })
+    }
+  }, [nodes.length, aiStatus, fitView])
 
   const [editingEdge, setEditingEdge] = useState<{ id: string; x: number; y: number; label: string } | null>(null)
 
@@ -244,8 +282,13 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
       <Panel position="top-right" className="mt-2 mr-2">
         <PresenceBar />
       </Panel>
-      <Panel position="top-left" className="mt-2 ml-2">
+      <Panel position="top-left" className="mt-2 ml-2 flex flex-col gap-1">
         <SaveStatusChip status={saveStatus} />
+        {aiStatus && (
+          <span className="text-xs font-medium px-2 py-1 rounded-lg bg-bg-surface border border-accent-ai/40 text-accent-ai-text animate-pulse">
+            {aiStatus}
+          </span>
+        )}
       </Panel>
       <Panel position="bottom-left" className="mb-2 ml-2">
         <CanvasControls />

@@ -2,6 +2,17 @@ import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function generateSlug(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "project";
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${base}-${suffix}`;
+}
+
 export async function GET() {
   const { userId } = await auth();
   if (!userId) {
@@ -27,7 +38,8 @@ export async function POST(request: NextRequest) {
   const name =
     typeof rawName === "string" && rawName.trim() ? rawName.trim() : "Untitled Project";
 
-  const project = await prisma.orm.public.Project.create({ ownerId: userId, name });
+  const slug = generateSlug(name);
+  const project = await prisma.orm.public.Project.create({ ownerId: userId, name, slug });
 
   return Response.json(project, { status: 201 });
 }

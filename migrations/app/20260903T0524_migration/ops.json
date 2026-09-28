@@ -1,0 +1,535 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.project",
+    "label": "Create table \"project\"",
+    "summary": "Creates table \"project\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "project"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"project\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"project\"",
+        "sql": "CREATE TABLE \"public\".\"project\" (\n  \"canvasJsonPath\" text,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"description\" text,\n  \"id\" text NOT NULL,\n  \"name\" text NOT NULL,\n  \"ownerId\" text NOT NULL,\n  \"status\" text DEFAULT 'DRAFT' NOT NULL,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"project_status_check_bee39d02\" CHECK (\"status\" IN ('DRAFT', 'ARCHIVED'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"project\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.projectCollaborator",
+    "label": "Create table \"projectCollaborator\"",
+    "summary": "Creates table \"projectCollaborator\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"projectCollaborator\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"projectCollaborator\"",
+        "sql": "CREATE TABLE \"public\".\"projectCollaborator\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"projectId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"projectCollaborator\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.taskRun",
+    "label": "Create table \"taskRun\"",
+    "summary": "Creates table \"taskRun\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "taskRun"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"taskRun\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"taskRun\"",
+        "sql": "CREATE TABLE \"public\".\"taskRun\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" text NOT NULL,\n  \"projectId\" text NOT NULL,\n  \"runId\" text NOT NULL,\n  \"userId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"taskRun\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.projectCollaborator.projectCollaborator_projectId_email_key",
+    "label": "Add unique constraint on \"projectCollaborator\" (projectId, email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "projectCollaborator_projectId_email_key",
+        "table": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"projectCollaborator_projectId_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "projectCollaborator_projectId_email_key",
+          "public",
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"projectCollaborator_projectId_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"projectCollaborator\" ADD CONSTRAINT \"projectCollaborator_projectId_email_key\" UNIQUE (\"projectId\", \"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"projectCollaborator_projectId_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "projectCollaborator_projectId_email_key",
+          "public",
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.taskRun.taskRun_runId_key",
+    "label": "Add unique constraint on \"taskRun\" (runId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "taskRun_runId_key",
+        "table": "taskRun"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"taskRun_runId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "taskRun_runId_key",
+          "public",
+          "\"public\".\"taskRun\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"taskRun_runId_key\"",
+        "sql": "ALTER TABLE \"public\".\"taskRun\" ADD CONSTRAINT \"taskRun_runId_key\" UNIQUE (\"runId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"taskRun_runId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "taskRun_runId_key",
+          "public",
+          "\"public\".\"taskRun\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.project.project_createdAt_idx_9575dbd7",
+    "label": "Create index \"project_createdAt_idx_9575dbd7\" on \"project\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "project_createdAt_idx_9575dbd7",
+        "table": "project"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"project_createdAt_idx_9575dbd7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project_createdAt_idx_9575dbd7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"project_createdAt_idx_9575dbd7\"",
+        "sql": "CREATE INDEX \"project_createdAt_idx_9575dbd7\" ON \"public\".\"project\" (\"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"project_createdAt_idx_9575dbd7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project_createdAt_idx_9575dbd7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.project.project_ownerId_idx_e2d0c1ef",
+    "label": "Create index \"project_ownerId_idx_e2d0c1ef\" on \"project\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "project_ownerId_idx_e2d0c1ef",
+        "table": "project"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"project_ownerId_idx_e2d0c1ef\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"project_ownerId_idx_e2d0c1ef\"",
+        "sql": "CREATE INDEX \"project_ownerId_idx_e2d0c1ef\" ON \"public\".\"project\" (\"ownerId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"project_ownerId_idx_e2d0c1ef\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"project_ownerId_idx_e2d0c1ef\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.projectCollaborator.projectCollaborator_email_idx_46df9cad",
+    "label": "Create index \"projectCollaborator_email_idx_46df9cad\" on \"projectCollaborator\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "projectCollaborator_email_idx_46df9cad",
+        "table": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"projectCollaborator_email_idx_46df9cad\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_email_idx_46df9cad\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"projectCollaborator_email_idx_46df9cad\"",
+        "sql": "CREATE INDEX \"projectCollaborator_email_idx_46df9cad\" ON \"public\".\"projectCollaborator\" (\"email\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"projectCollaborator_email_idx_46df9cad\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_email_idx_46df9cad\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.projectCollaborator.projectCollaborator_projectId_createdAt_idx_d2d6484f",
+    "label": "Create index \"projectCollaborator_projectId_createdAt_idx_d2d6484f\" on \"projectCollaborator\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "projectCollaborator_projectId_createdAt_idx_d2d6484f",
+        "table": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"projectCollaborator_projectId_createdAt_idx_d2d6484f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_projectId_createdAt_idx_d2d6484f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"projectCollaborator_projectId_createdAt_idx_d2d6484f\"",
+        "sql": "CREATE INDEX \"projectCollaborator_projectId_createdAt_idx_d2d6484f\" ON \"public\".\"projectCollaborator\" (\"projectId\", \"createdAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"projectCollaborator_projectId_createdAt_idx_d2d6484f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_projectId_createdAt_idx_d2d6484f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.projectCollaborator.projectCollaborator_projectId_idx_a96e4d92",
+    "label": "Create index \"projectCollaborator_projectId_idx_a96e4d92\" on \"projectCollaborator\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "projectCollaborator_projectId_idx_a96e4d92",
+        "table": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"projectCollaborator_projectId_idx_a96e4d92\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_projectId_idx_a96e4d92\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"projectCollaborator_projectId_idx_a96e4d92\"",
+        "sql": "CREATE INDEX \"projectCollaborator_projectId_idx_a96e4d92\" ON \"public\".\"projectCollaborator\" (\"projectId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"projectCollaborator_projectId_idx_a96e4d92\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"projectCollaborator_projectId_idx_a96e4d92\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.taskRun.taskRun_runId_idx_a6016437",
+    "label": "Create index \"taskRun_runId_idx_a6016437\" on \"taskRun\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "taskRun_runId_idx_a6016437",
+        "table": "taskRun"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"taskRun_runId_idx_a6016437\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun_runId_idx_a6016437\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"taskRun_runId_idx_a6016437\"",
+        "sql": "CREATE INDEX \"taskRun_runId_idx_a6016437\" ON \"public\".\"taskRun\" (\"runId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"taskRun_runId_idx_a6016437\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun_runId_idx_a6016437\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.taskRun.taskRun_userId_projectId_idx_a2a73bc7",
+    "label": "Create index \"taskRun_userId_projectId_idx_a2a73bc7\" on \"taskRun\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "taskRun_userId_projectId_idx_a2a73bc7",
+        "table": "taskRun"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"taskRun_userId_projectId_idx_a2a73bc7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun_userId_projectId_idx_a2a73bc7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"taskRun_userId_projectId_idx_a2a73bc7\"",
+        "sql": "CREATE INDEX \"taskRun_userId_projectId_idx_a2a73bc7\" ON \"public\".\"taskRun\" (\"userId\", \"projectId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"taskRun_userId_projectId_idx_a2a73bc7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"taskRun_userId_projectId_idx_a2a73bc7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.projectCollaborator.projectCollaborator_projectId_fkey",
+    "label": "Add foreign key \"projectCollaborator_projectId_fkey\" on \"projectCollaborator\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "projectCollaborator_projectId_fkey",
+        "table": "projectCollaborator"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"projectCollaborator_projectId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "projectCollaborator_projectId_fkey",
+          "public",
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"projectCollaborator_projectId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"projectCollaborator\"\nADD CONSTRAINT \"projectCollaborator_projectId_fkey\"\nFOREIGN KEY (\"projectId\")\nREFERENCES \"public\".\"project\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"projectCollaborator_projectId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "projectCollaborator_projectId_fkey",
+          "public",
+          "\"public\".\"projectCollaborator\""
+        ]
+      }
+    ]
+  }
+]

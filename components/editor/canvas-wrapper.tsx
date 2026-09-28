@@ -1,8 +1,7 @@
 "use client"
 
 import { Component, type ReactNode } from "react"
-import { LiveblocksProvider, RoomProvider, ClientSideSuspense } from "@liveblocks/react"
-import { LiveObject, LiveMap } from "@liveblocks/client"
+import { ClientSideSuspense } from "@liveblocks/react"
 import { Canvas } from "./canvas"
 import type { PendingTemplate } from "./starter-templates"
 
@@ -20,13 +19,12 @@ class ErrorBoundary extends Component<
 }
 
 interface CanvasWrapperProps {
-  roomId: string
   projectId: string
   pendingTemplate?: PendingTemplate | null
   onTemplateDone?: () => void
 }
 
-export function CanvasWrapper({ roomId, projectId, pendingTemplate, onTemplateDone }: CanvasWrapperProps) {
+export function CanvasWrapper({ projectId, pendingTemplate, onTemplateDone }: CanvasWrapperProps) {
   return (
     <ErrorBoundary
       fallback={
@@ -35,28 +33,15 @@ export function CanvasWrapper({ roomId, projectId, pendingTemplate, onTemplateDo
         </div>
       }
     >
-      <LiveblocksProvider authEndpoint="/api/liveblocks-auth">
-        <RoomProvider
-          id={roomId}
-          initialPresence={{ cursor: null, thinking: false }}
-          initialStorage={() => ({
-            flow: new LiveObject({
-              nodes: new LiveMap(),
-              edges: new LiveMap(),
-            }),
-          })}
-        >
-          <ClientSideSuspense
-            fallback={
-              <div className="flex w-full h-full items-center justify-center">
-                <span className="text-sm text-text-muted">Connecting…</span>
-              </div>
-            }
-          >
-            <Canvas projectId={projectId} pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
-          </ClientSideSuspense>
-        </RoomProvider>
-      </LiveblocksProvider>
+      <ClientSideSuspense
+        fallback={
+          <div className="flex w-full h-full items-center justify-center">
+            <span className="text-sm text-text-muted">Connecting…</span>
+          </div>
+        }
+      >
+        <Canvas projectId={projectId} pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
+      </ClientSideSuspense>
     </ErrorBoundary>
   )
 }

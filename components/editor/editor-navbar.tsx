@@ -50,8 +50,9 @@ export function EditorNavbar({
 
       <div className="flex items-center justify-end gap-2 flex-1">
         {onTemplates && (
-          <Button variant="ghost" size="icon-sm" onClick={onTemplates} aria-label="Starter templates">
-            <LayoutTemplate className="size-4" />
+          <Button variant="ghost" size="sm" onClick={onTemplates} aria-label="Starter templates" className="gap-1.5">
+            <LayoutTemplate className="size-3.5" />
+            Templates
           </Button>
         )}
         {onShare && (
