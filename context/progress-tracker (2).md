@@ -80,7 +80,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Next Up
 
-- None — all current features implemented.
+- **29-loadcanvas**: Secured the design route against cross-project edits; gated prompts on Liveblocks/snapshot hydration; added create/edit task branches with validated edit plans, targeted conflict checks, per-project Trigger queueing, run markers, and incremental positioning; changed canvas snapshots to save authoritative room state with immutable Blob paths and compare-before-write. TypeScript, focused tests, and the Next.js build pass. Two local browser tabs confirmed Liveblocks propagation, reload, one-database addition with all original hashes unchanged, clarification without mutation, targeted rename, and Blob/live graph equality. Trigger.dev production worker version `20260929.3` deployed. Vercel app deployment remains pending.
 
 ## Open Questions
 

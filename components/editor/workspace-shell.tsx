@@ -27,6 +27,7 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
   const [shareOpen, setShareOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [pendingTemplate, setPendingTemplate] = useState<PendingTemplate | null>(null)
+  const [canvasState, setCanvasState] = useState<{ ready: boolean; error: string | null }>({ ready: false, error: null })
   const actions = useProjectActions(project.id)
 
   const handleImportTemplate = useCallback((template: CanvasTemplate) => {
@@ -43,6 +44,7 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
             nodes: new LiveMap(),
             edges: new LiveMap(),
           }),
+          appliedAiRuns: new LiveMap<string, string>(),
         })}
       >
         <div className="flex flex-col h-screen overflow-hidden bg-bg-base">
@@ -71,13 +73,14 @@ export function WorkspaceShell({ project, isOwner, ownedProjects, sharedProjects
             <main className="flex-1 relative overflow-hidden bg-bg-base">
               <CanvasWrapper
                 projectId={project.id}
+                onCanvasStateChange={setCanvasState}
                 pendingTemplate={pendingTemplate}
                 onTemplateDone={() => setPendingTemplate(null)}
               />
             </main>
           </div>
 
-          <AiSidebar isOpen={aiSidebarOpen} onClose={() => setAiSidebarOpen(false)} projectId={project.id} roomId={project.id} />
+          <AiSidebar isOpen={aiSidebarOpen} onClose={() => setAiSidebarOpen(false)} projectId={project.id} roomId={project.id} canvasState={canvasState} />
 
           <ProjectDialogs {...actions} />
           <StarterTemplatesModal

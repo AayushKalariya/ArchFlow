@@ -1,9 +1,12 @@
 import { task, metadata, logger } from "@trigger.dev/sdk";
 import { generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { Liveblocks, LiveObject } from "@liveblocks/node";
+import { Liveblocks, LiveObject, LiveMap } from "@liveblocks/node";
 import dagre from "@dagrejs/dagre";
 import type { CanvasNode, CanvasEdge } from "../../types/canvas";
+import { NODE_COLORS, NODE_SHAPES } from "../../types/canvas";
+import { z } from "zod";
+import { editPlanSchema, expectedAddition, modelGraph, placeNewNodes, readDesignGraph, stableId, validateEditPlan, type DesignGraph, type EditPlan } from "./design-graph";
 
 const SYSTEM_PROMPT = `You are a system architecture expert. Generate a system architecture diagram as structured JSON.
 
@@ -118,150 +121,218 @@ function getLiveblocks() {
   return new Liveblocks({ secret: process.env.LIVEBLOCKS_SECRET_KEY! });
 }
 
+const createNodeSchema = z.object({
+  id: z.string().trim().min(1), type: z.literal("canvasNode"),
+  position: z.object({ x: z.number().finite(), y: z.number().finite() }),
+  data: z.object({
+    label: z.string().trim().min(1),
+    color: z.string().refine((value) => NODE_COLORS.some((color) => color.fill === value)),
+    textColor: z.string(),
+    shape: z.enum(NODE_SHAPES as [typeof NODE_SHAPES[number], ...typeof NODE_SHAPES[number][]]),
+  }),
+});
+const createEdgeSchema = z.object({
+  id: z.string().trim().min(1), type: z.literal("canvasEdge"),
+  source: z.string().min(1), target: z.string().min(1),
+  label: z.string().optional(),
+});
+const createGraphSchema = z.object({ nodes: z.array(createNodeSchema).min(1).max(16), edges: z.array(createEdgeSchema).max(32) });
+
+const EDIT_PROMPT = `You are editing an existing system architecture canvas. Return ONLY a JSON object with exactly these keys:
+{"summary":"short description","addNodes":[{"tempId":"local-1","label":"Read Replica","shape":"cylinder","color":"#10233D"}],"addEdges":[{"source":"existing-or-temp-id","target":"existing-or-temp-id","label":"optional relationship"}],"updateNodes":[{"id":"existing-id","label":"optional new label","shape":"optional shape","color":"optional fill"}],"updateEdges":[{"id":"existing-edge-id","label":"new label"}],"clarifyingQuestion":null}
+Use the smallest change satisfying the request. Keep every existing node and edge, ID, label, style, size, and position unless the user explicitly requests a specific field update. Never delete, replace, or reposition anything. New tempIds are local to this response; never invent permanent IDs. Connect added nodes meaningfully. If the target or architectural choice is ambiguous, return empty operation arrays and a clarifyingQuestion. For overloaded databases, ask whether pressure is reads, writes, or storage unless the canvas/request establishes it. A read replica only addresses read pressure. Respect explicit counts exactly. Allowed shapes: rectangle, diamond, circle, pill, cylinder, hexagon. Allowed colors: ${NODE_COLORS.map((entry) => entry.fill).join(", ")}. No markdown.`;
+
+class CanvasChangedError extends Error {}
+
+function parseJson(text: string): unknown {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try { return JSON.parse(cleaned); }
+  catch { throw new Error("AI returned invalid JSON. The canvas was not changed."); }
+}
+
+function validateCreate(raw: unknown): DesignGraph {
+  const result = createGraphSchema.safeParse(raw);
+  if (!result.success) throw new Error("AI returned an invalid initial design. The canvas was not changed.");
+  const nodes = result.data.nodes;
+  const edges = result.data.edges;
+  const ids = new Set(nodes.map((node) => node.id));
+  if (ids.size !== nodes.length || new Set(edges.map((edge) => edge.id)).size !== edges.length
+    || edges.some((edge) => !ids.has(edge.source) || !ids.has(edge.target) || edge.source === edge.target)
+    || nodes.some((node) => NODE_COLORS.find((color) => color.fill === node.data.color)?.text !== node.data.textColor)) {
+    throw new Error("AI returned conflicting IDs, edges, or colors. The canvas was not changed.");
+  }
+  const reached = new Set<string>([nodes[0].id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (reached.has(edge.source) && !reached.has(edge.target)) { reached.add(edge.target); changed = true; }
+      if (reached.has(edge.target) && !reached.has(edge.source)) { reached.add(edge.source); changed = true; }
+    }
+  }
+  if (reached.size !== nodes.length) throw new Error("AI returned a disconnected initial design. The canvas was not changed.");
+  return {
+    nodes: layoutNodes(nodes.map((node) => normalizeNode(node as CanvasNode)), edges as CanvasEdge[]),
+    edges: edges as CanvasEdge[],
+  };
+}
+
+function graphFromRoot(root: { toJSON(): unknown }): DesignGraph {
+  return readDesignGraph(root.toJSON());
+}
+
 export const designAgent = task({
   id: "design-agent",
+  queue: { concurrencyLimit: 1 },
   retry: { maxAttempts: 2 },
-  run: async (payload: { prompt: string; roomId: string }) => {
+  run: async (payload: { prompt: string; roomId: string }, { ctx }) => {
     const { prompt, roomId } = payload;
+    const runId = ctx.run.id;
     const liveblocks = getLiveblocks();
-
-    metadata.set("status", "starting").set("message", "Ghost AI is starting…");
-
-    // Announce AI presence with thinking cursor
-    await liveblocks.setPresence(roomId, {
-      userId: AI_USER_ID,
-      data: { thinking: true, cursor: { x: 600, y: 350 } },
-      userInfo: AI_USER_INFO,
-      ttl: 120,
-    });
-
-    await liveblocks.broadcastEvent(roomId, {
-      type: "ai-status",
-      status: "processing",
-      message: "Ghost AI is designing your architecture…",
-    });
-
-    metadata.set("status", "processing").set("message", "Generating design with Claude…");
-
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-
-    let parsed: { nodes: CanvasNode[]; edges: CanvasEdge[] };
-
-    try {
-      const result = await generateText({
-        model: anthropic("claude-sonnet-4-6"),
-        system: SYSTEM_PROMPT,
-        prompt: `Design a system architecture for: ${prompt}`,
-        maxOutputTokens: 4096,
-      });
-
-      const text = result.text.trim();
-      const match = text.match(/\{[\s\S]*\}/);
-      parsed = JSON.parse(match ? match[0] : text) as { nodes: CanvasNode[]; edges: CanvasEdge[] };
-
-      // Ensure every node carries the dimensions React Flow needs to render it.
-      parsed.nodes = (parsed.nodes ?? []).map(normalizeNode);
-      parsed.edges = (parsed.edges ?? []).map((edge) => ({ ...edge, type: "canvasEdge" as const }));
-
-      if (parsed.nodes.length === 0) {
-        throw new Error("Model returned no nodes");
-      }
-
-      // Discard model coordinates; recompute a clean, non-overlapping layout.
-      parsed.nodes = layoutNodes(parsed.nodes, parsed.edges);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error("AI generation failed", { error: msg });
-
-      metadata.set("status", "error").set("message", "Failed to generate design.");
-      await liveblocks.broadcastEvent(roomId, {
-        type: "ai-status",
-        status: "error",
-        message: "Design generation failed. Please try again.",
-      });
-      await liveblocks.setPresence(roomId, {
-        userId: AI_USER_ID,
-        data: { thinking: false, cursor: null },
-        userInfo: AI_USER_INFO,
-        ttl: 2,
-      });
-      throw err;
-    }
-
-    metadata.set("status", "applying").set("message", "Applying design to canvas…");
-
-    // Move cursor to signal canvas work
-    await liveblocks.setPresence(roomId, {
-      userId: AI_USER_ID,
-      data: { thinking: true, cursor: { x: 400, y: 280 } },
-      userInfo: AI_USER_INFO,
-      ttl: 60,
-    });
-
-    // Apply generated nodes and edges to the shared Liveblocks canvas
-    try {
-      await liveblocks.mutateStorage(roomId, ({ root }) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const flow = root.get("flow") as any;
-        if (!flow) {
-          throw new Error("Liveblocks storage 'flow' key not found — room may not be initialized");
-        }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const liveNodes = flow.get("nodes") as any;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const liveEdges = flow.get("edges") as any;
-
-        for (const k of [...liveNodes.keys()]) liveNodes.delete(k);
-        for (const k of [...liveEdges.keys()]) liveEdges.delete(k);
-
-        for (const node of parsed.nodes) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          liveNodes.set(node.id, new LiveObject(node as any));
-        }
-        for (const edge of parsed.edges) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          liveEdges.set(edge.id, new LiveObject(edge as any));
-        }
-      });
-    } catch (storageErr) {
-      const msg = storageErr instanceof Error ? storageErr.message : String(storageErr);
-      logger.error("mutateStorage failed", { error: msg });
-      metadata.set("status", "error").set("message", "Failed to apply design to canvas.");
-      await liveblocks.broadcastEvent(roomId, {
-        type: "ai-status",
-        status: "error",
-        message: "Design generated but failed to apply to canvas. Please try again.",
-      });
-      await liveblocks.setPresence(roomId, {
-        userId: AI_USER_ID,
-        data: { thinking: false, cursor: null },
-        userInfo: AI_USER_INFO,
-        ttl: 2,
-      });
-      throw storageErr;
-    }
-
-    await liveblocks.broadcastEvent(roomId, {
-      type: "ai-status",
-      status: "complete",
-      message: "Ghost AI has updated your canvas.",
-    });
-
-    metadata.set("status", "complete").set("message", "Design applied to canvas.");
-
-    // Clear AI presence
-    await liveblocks.setPresence(roomId, {
-      userId: AI_USER_ID,
-      data: { thinking: false, cursor: null },
-      userInfo: AI_USER_INFO,
-      ttl: 2,
-    });
-
-    logger.log("design-agent complete", { nodes: parsed.nodes.length, edges: parsed.edges.length });
-    return {
-      success: true,
-      actionsApplied: parsed.nodes.length + parsed.edges.length,
-      summary: `Designed architecture with ${parsed.nodes.length} nodes and ${parsed.edges.length} edges: ${parsed.nodes.map((n) => n.data.label).join(", ")}.`,
+    const finish = async (summary: string, actionsApplied: number, fitView: boolean) => {
+      metadata.set("status", "complete").set("message", summary);
+      await liveblocks.broadcastEvent(roomId, { type: "ai-status", status: "complete", message: summary, fitView });
+      return { success: true, actionsApplied, summary };
     };
+    metadata.set("status", "starting").set("message", "Reading the current canvas…");
+    try {
+      await liveblocks.setPresence(roomId, {
+        userId: AI_USER_ID, data: { thinking: true, cursor: { x: 600, y: 350 } },
+        userInfo: AI_USER_INFO, ttl: 120,
+      });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const document = await liveblocks.getStorageDocument(roomId, "json");
+        const graph = readDesignGraph(document);
+        const appliedRuns = (document as { appliedAiRuns?: Record<string, string> }).appliedAiRuns;
+        if (appliedRuns?.[runId]) return await finish(appliedRuns[runId], 0, false);
+        const isCreate = graph.nodes.length === 0 && graph.edges.length === 0;
+        const status = isCreate ? "Creating an initial architecture…" : "Planning a small edit to the current canvas…";
+        metadata.set("status", "processing").set("message", status);
+        await liveblocks.broadcastEvent(roomId, { type: "ai-status", status: "processing", message: status });
+
+        if (!isCreate && /\b(?:overload(?:ed)?|overloaded|bottleneck)\b/i.test(prompt)
+          && /\b(?:database|db)\b/i.test(prompt)
+          && !/\b(?:read|reads|write|writes|storage|disk|capacity|shard)\b/i.test(prompt)) {
+          return await finish("Is the database overloaded by reads, writes, or storage? That determines which additional database or storage change would help.", 0, false);
+        }
+
+        let created: DesignGraph | null = null;
+        let plan: EditPlan | null = null;
+        if (isCreate) {
+          const result = await generateText({ model: anthropic("claude-sonnet-4-6"), system: SYSTEM_PROMPT,
+            prompt: `Design a system architecture for: ${prompt}`, maxOutputTokens: 4096 });
+          created = validateCreate(parseJson(result.text));
+        } else {
+          const expectation = expectedAddition(prompt);
+          const input = `Current canvas:\n${JSON.stringify(modelGraph(graph))}\n\nUser request: ${prompt}\n${expectation ? `Add exactly ${expectation.count} database node(s), with only necessary edges.` : ""}`;
+          for (let generation = 0; generation < 2; generation++) {
+            const result = await generateText({ model: anthropic("claude-sonnet-4-6"), system: EDIT_PROMPT,
+              prompt: generation === 0 ? input : `${input}\nYour previous plan violated the requested count or shape. Correct it exactly.`, maxOutputTokens: 3000 });
+            const parsed = editPlanSchema.safeParse(parseJson(result.text));
+            if (!parsed.success) throw new Error("AI returned an invalid edit plan. The canvas was not changed.");
+            plan = parsed.data;
+            try { validateEditPlan(plan, graph, prompt); break; }
+            catch (error) {
+              if (!expectation || generation === 1) throw error;
+            }
+          }
+          if (!plan) throw new Error("AI did not return an edit plan.");
+          if (plan.clarifyingQuestion) {
+            return await finish(plan.clarifyingQuestion, 0, false);
+          }
+          if (!plan.addNodes.length && !plan.addEdges.length && !plan.updateNodes.length && !plan.updateEdges.length) {
+            return await finish(`No canvas changes were needed. ${plan.summary}`, 0, false);
+          }
+        }
+
+        metadata.set("status", "applying").set("message", "Applying validated canvas changes…");
+        let actionsApplied = 0;
+        let summary = "";
+        try {
+          await liveblocks.mutateStorage(roomId, ({ root }) => {
+            const current = graphFromRoot(root);
+            let marker = root.get("appliedAiRuns");
+            if (marker?.get(runId)) { summary = marker.get(runId)!; return; }
+            const flow = root.get("flow");
+            if (!flow) throw new Error("Canvas storage is missing its flow maps.");
+            const liveNodes = flow.get("nodes");
+            const liveEdges = flow.get("edges");
+            if (created) {
+              if (current.nodes.length || current.edges.length) throw new CanvasChangedError("Canvas changed during initial generation.");
+              for (const node of created.nodes) liveNodes.set(node.id, new LiveObject(node as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveNodes.set>[1]);
+              for (const edge of created.edges) liveEdges.set(edge.id, new LiveObject(edge as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveEdges.set>[1]);
+              actionsApplied = created.nodes.length + created.edges.length;
+              summary = `Created an architecture with ${created.nodes.length} components and ${created.edges.length} connections.`;
+            } else if (plan) {
+              // Validate every target against the latest room state before issuing any writes.
+              const oldNodes = new Map(graph.nodes.map((node) => [node.id, node]));
+              const oldEdges = new Map(graph.edges.map((edge) => [edge.id, edge]));
+              const nowNodes = new Map(current.nodes.map((node) => [node.id, node]));
+              const nowEdges = new Map(current.edges.map((edge) => [edge.id, edge]));
+              const referencedNodeIds = new Set([
+                ...plan.updateNodes.map((node) => node.id),
+                ...plan.addEdges.flatMap((edge) => [edge.source, edge.target]).filter((id) => oldNodes.has(id)),
+              ]);
+              for (const id of referencedNodeIds) {
+                if (!nowNodes.has(id) || JSON.stringify(nowNodes.get(id)) !== JSON.stringify(oldNodes.get(id))) {
+                  throw new CanvasChangedError(`A referenced component changed while AI was working (${id}).`);
+                }
+              }
+              for (const update of plan.updateEdges) {
+                if (!nowEdges.has(update.id) || JSON.stringify(nowEdges.get(update.id)) !== JSON.stringify(oldEdges.get(update.id))) {
+                  throw new CanvasChangedError(`A referenced connection changed while AI was working (${update.id}).`);
+                }
+              }
+              const newNodes = placeNewNodes(plan, current, runId);
+              const tempToId = new Map(plan.addNodes.map((item, index) => [item.tempId, newNodes[index].id]));
+              const newEdges: CanvasEdge[] = plan.addEdges.map((edge, index) => ({
+                id: stableId(runId, "edge", String(index)), type: "canvasEdge",
+                source: tempToId.get(edge.source) ?? edge.source,
+                target: tempToId.get(edge.target) ?? edge.target,
+                ...(edge.label ? { label: edge.label } : {}),
+              }));
+              if (newNodes.some((node) => nowNodes.has(node.id)) || newEdges.some((edge) => nowEdges.has(edge.id))) throw new CanvasChangedError("Generated IDs already exist in the room.");
+              for (const item of newNodes) liveNodes.set(item.id, new LiveObject(item as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveNodes.set>[1]);
+              for (const item of newEdges) liveEdges.set(item.id, new LiveObject(item as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveEdges.set>[1]);
+              for (const update of plan.updateNodes) {
+                const target = liveNodes.get(update.id)!;
+                const data = target.get("data") as unknown as CanvasNode["data"];
+                target.set("data", {
+                  ...data,
+                  ...(update.label !== undefined ? { label: update.label } : {}),
+                  ...(update.shape !== undefined ? { shape: update.shape } : {}),
+                  ...(update.color !== undefined ? { color: update.color, textColor: NODE_COLORS.find((item) => item.fill === update.color)!.text } : {}),
+                } as never);
+              }
+              for (const update of plan.updateEdges) liveEdges.get(update.id)!.set("label", update.label);
+              actionsApplied = newNodes.length + newEdges.length + plan.updateNodes.length + plan.updateEdges.length;
+              const parts = [];
+              if (newNodes.length) parts.push(`added ${newNodes.length} component${newNodes.length === 1 ? "" : "s"} (${newNodes.map((node) => node.data.label).join(", ")})`);
+              if (newEdges.length) parts.push(`added ${newEdges.length} connection${newEdges.length === 1 ? "" : "s"}`);
+              if (plan.updateNodes.length || plan.updateEdges.length) parts.push(`updated ${plan.updateNodes.length + plan.updateEdges.length} existing element${plan.updateNodes.length + plan.updateEdges.length === 1 ? "" : "s"}`);
+              summary = `Ghost AI ${parts.join(" and ")}.`;
+            }
+            if (!marker) { marker = new LiveMap<string, string>(); root.set("appliedAiRuns", marker); }
+            marker.set(runId, summary);
+          });
+        } catch (error) {
+          if (error instanceof CanvasChangedError && attempt === 0) continue;
+          throw error;
+        }
+        return await finish(summary, actionsApplied, isCreate);
+      }
+      throw new Error("Canvas changed while AI was working. Please try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Design request failed.";
+      logger.error("design-agent failed", { error: message });
+      metadata.set("status", "error").set("message", message);
+      await liveblocks.broadcastEvent(roomId, { type: "ai-status", status: "error", message }).catch(() => {});
+      throw error;
+    } finally {
+      await liveblocks.setPresence(roomId, {
+        userId: AI_USER_ID, data: { thinking: false, cursor: null }, userInfo: AI_USER_INFO, ttl: 2,
+      }).catch(() => {});
+    }
   },
 });

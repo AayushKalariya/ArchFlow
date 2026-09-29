@@ -2,10 +2,12 @@ import { put, get } from "@vercel/blob"
 import type { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getCurrentUser, checkProjectAccess } from "@/lib/project-access"
+import { getLiveblocks } from "@/lib/liveblocks"
+import { readDesignGraph } from "@/src/trigger/design-graph"
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 
-export async function PUT(request: NextRequest, { params }: RouteContext) {
+export async function PUT(_request: NextRequest, { params }: RouteContext) {
   const cu = await getCurrentUser()
   if (!cu) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
@@ -23,23 +25,24 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     return Response.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const body: unknown = await request.json().catch(() => null)
-  if (!body || typeof body !== "object") {
-    return Response.json({ error: "Invalid body" }, { status: 400 })
+  // Read the live room for every save. Client requests may arrive out of order.
+  const liveblocks = getLiveblocks()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const currentProject = await prisma.orm.public.Project.first({ id: projectId })
+    if (!currentProject) return Response.json({ error: "Not found" }, { status: 404 })
+    const graph = readDesignGraph(await liveblocks.getStorageDocument(projectId, "json"))
+    const blob = await put(`canvas/${projectId}/${crypto.randomUUID()}.json`, JSON.stringify(graph), {
+      access: "private",
+      contentType: "application/json",
+    })
+    const latest = readDesignGraph(await liveblocks.getStorageDocument(projectId, "json"))
+    if (JSON.stringify(latest) !== JSON.stringify(graph)) continue
+    const updated = await prisma.orm.public.Project.where({ id: projectId, canvasJsonPath: currentProject.canvasJsonPath }).update({
+      canvasJsonPath: blob.url,
+    })
+    if (updated) return Response.json({ url: blob.url })
   }
-
-  const json = JSON.stringify(body)
-  const blob = await put(`canvas/${projectId}.json`, json, {
-    access: "private",
-    contentType: "application/json",
-    allowOverwrite: true,
-  })
-
-  await prisma.orm.public.Project.where({ id: projectId }).update({
-    canvasJsonPath: blob.url,
-  })
-
-  return Response.json({ url: blob.url })
+  return Response.json({ error: "Canvas changed during save. It will be retried on the next edit." }, { status: 409 })
 }
 
 export async function GET(_request: NextRequest, { params }: RouteContext) {
@@ -66,7 +69,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 
   const result = await get(project.canvasJsonPath, { access: "private" })
   if (!result) {
-    return Response.json({ canvas: null })
+    return Response.json({ error: "Saved canvas is unavailable" }, { status: 503 })
   }
 
   const canvas = await new Response(result.stream).json()

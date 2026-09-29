@@ -22,6 +22,7 @@ import {
 } from "@liveblocks/react"
 import { useRealtimeRun } from "@trigger.dev/react-hooks"
 import { isValidAiStatusPayload, isValidChatMessagePayload, type ChatMessagePayload } from "@/types/tasks"
+import type { designAgent } from "@/src/trigger/design-agent"
 
 const AI_FEED_ID = "ai-status-feed"
 const CHAT_FEED_ID = "ai-chat"
@@ -65,14 +66,16 @@ function EmptyArchitectState({ onChipClick }: { onChipClick: (text: string) => v
 interface ArchitectTabProps {
   projectId: string
   roomId: string
+  canvasState: { ready: boolean; error: string | null }
   statusText: string | null
   onPublishStatus: (status: "processing" | "complete" | "error", text?: string) => Promise<void>
 }
 
-function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: ArchitectTabProps) {
+function ArchitectTab({ projectId, roomId, canvasState, statusText, onPublishStatus }: ArchitectTabProps) {
   const [runId, setRunId] = useState<string | null>(null)
   const [publicToken, setPublicToken] = useState<string | null>(null)
   const [input, setInput] = useState("")
+  const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const updateMyPresence = useUpdateMyPresence()
@@ -85,13 +88,13 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
     createFeed(CHAT_FEED_ID).catch(() => {})
   }, [createFeed])
 
-  const { run } = useRealtimeRun(runId ?? "", {
+  const { run, error: realtimeError } = useRealtimeRun<typeof designAgent>(runId ?? "", {
     accessToken: publicToken ?? "",
     enabled: !!runId && !!publicToken,
-    skipColumns: ["payload", "output"],
+    skipColumns: ["payload"],
   })
 
-  const isRunning = !!runId && !!run && !TERMINAL_STATUSES.has(run.status)
+  const isRunning = submitting || !!runId
 
   const { messages: feedMessages } = useFeedMessages(CHAT_FEED_ID)
 
@@ -132,8 +135,8 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
 
     const isSuccess = run.status === "COMPLETED"
     const content = isSuccess
-      ? "Ghost AI has finished designing your canvas. Check it out!"
-      : `Run ended with status: ${run.status}`
+      ? run.output?.summary ?? "Ghost AI finished the request."
+      : run.error?.message ?? `Run ended with status: ${run.status}`
 
     createFeedMessage(CHAT_FEED_ID, {
       chatMessage: true,
@@ -151,12 +154,25 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
 
     setRunId(null)
     setPublicToken(null)
-    completionHandledRef.current = false
-  }, [run?.status, createFeedMessage, onPublishStatus, updateMyPresence])
+  }, [run, createFeedMessage, onPublishStatus, updateMyPresence])
+
+  useEffect(() => {
+    if (!realtimeError || !runId || completionHandledRef.current) return
+    completionHandledRef.current = true
+    const message = `Could not follow the design run: ${realtimeError.message}`
+    createFeedMessage(CHAT_FEED_ID, {
+      chatMessage: true, sender: "ghost-ai", senderName: "Ghost AI",
+      content: message, timestamp: Date.now(), role: "assistant",
+    }).catch(() => {})
+    setRunId(null)
+    setPublicToken(null)
+  }, [realtimeError, runId, createFeedMessage])
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
-    if (!text || isRunning) return
+    if (!text || isRunning || !canvasState.ready) return
+
+    setSubmitting(true)
 
     setInput("")
     if (textareaRef.current) textareaRef.current.style.height = "72px"
@@ -170,10 +186,9 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
       role: "user",
     }).catch(() => {})
 
-    await onPublishStatus("processing", "Ghost AI is designing your architecture…")
-    updateMyPresence({ thinking: true })
-
     try {
+      await onPublishStatus("processing", "Ghost AI is reading the current canvas…")
+      updateMyPresence({ thinking: true })
       const res = await fetch("/api/ai/design", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,8 +216,10 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
       }).catch(() => {})
       await onPublishStatus("error", msg).catch(() => {})
       updateMyPresence({ thinking: false })
+    } finally {
+      setSubmitting(false)
     }
-  }, [input, isRunning, projectId, roomId, self, createFeedMessage, onPublishStatus, updateMyPresence])
+  }, [input, isRunning, canvasState.ready, projectId, roomId, self, createFeedMessage, onPublishStatus, updateMyPresence])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -254,7 +271,7 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
                   <Loader2 className="size-4 text-accent-ai-text animate-spin" />
                 </div>
                 <div className="max-w-[80%] px-3 py-2 rounded-2xl bg-bg-elevated border border-border-default text-accent-ai-text text-sm">
-                  Designing your architecture…
+                  Working on your canvas…
                 </div>
               </div>
             )}
@@ -271,6 +288,11 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
       )}
 
       <div className="shrink-0 p-3 border-t border-border-default">
+        {!canvasState.ready && (
+          <p className={`text-xs mb-2 ${canvasState.error ? "text-state-error" : "text-text-muted"}`}>
+            {canvasState.error ?? "Loading the current canvas…"}
+          </p>
+        )}
         <div className="flex gap-2 items-end">
           <textarea
             ref={textareaRef}
@@ -282,14 +304,14 @@ function ArchitectTab({ projectId, roomId, statusText, onPublishStatus }: Archit
             onKeyDown={handleKeyDown}
             placeholder="Ask Ghost AI…"
             rows={1}
-            disabled={isRunning}
+            disabled={isRunning || !canvasState.ready}
             className="flex-1 resize-none rounded-xl border border-border-default bg-bg-elevated px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-subtle transition-colors overflow-y-auto disabled:opacity-60"
             style={{ minHeight: "72px", maxHeight: "160px" }}
           />
           <Button
             size="icon"
             onClick={sendMessage}
-            disabled={!input.trim() || isRunning}
+            disabled={!input.trim() || isRunning || !canvasState.ready}
             className="shrink-0 self-end bg-[#62C073] text-[#0d1117] hover:bg-[#62C073]/80 disabled:opacity-40"
           >
             {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -705,9 +727,10 @@ interface AiSidebarProps {
   onClose: () => void
   projectId: string
   roomId: string
+  canvasState: { ready: boolean; error: string | null }
 }
 
-export function AiSidebar({ isOpen, onClose, projectId, roomId }: AiSidebarProps) {
+export function AiSidebar({ isOpen, onClose, projectId, roomId, canvasState }: AiSidebarProps) {
   const createFeed = useCreateFeed()
   const createFeedMessage = useCreateFeedMessage()
   const { messages } = useFeedMessages(AI_FEED_ID)
@@ -792,6 +815,7 @@ export function AiSidebar({ isOpen, onClose, projectId, roomId }: AiSidebarProps
           <ArchitectTab
             projectId={projectId}
             roomId={roomId}
+            canvasState={canvasState}
             statusText={statusText}
             onPublishStatus={handlePublishStatus}
           />

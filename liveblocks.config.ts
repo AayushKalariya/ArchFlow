@@ -10,6 +10,7 @@ declare global {
 
     Storage: {
       flow: LiveblocksFlow<CanvasNode, CanvasEdge>
+      appliedAiRuns?: import("@liveblocks/client").LiveMap<string, string>
     };
 
     UserMeta: {
@@ -25,6 +26,7 @@ declare global {
       type: "ai-status";
       status: "processing" | "complete" | "error";
       message: string;
+      fitView?: boolean;
     };
 
     ThreadMetadata: {};

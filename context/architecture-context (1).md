@@ -24,9 +24,12 @@
 ## Storage Model
 
 - **Database**: metadata, ownership, relationships, and task run records.
-- **Vercel Blob**: generated artifacts — canvas snapshots at `canvas/{projectId}.json` and specs at `specs/{projectId}/{specId}.md`.
+- **Liveblocks**: authoritative canvas graph while the editor is active; AI edits read and mutate room storage.
+- **Vercel Blob**: saved canvas snapshots at `canvas/{projectId}/{snapshotId}.json` and generated specs at `specs/{projectId}/{specId}.md`. A snapshot hydrates a room only when both live graph maps are empty.
 - Project records, spec records, and task run records belong in PostgreSQL.
-- Canvas content and Markdown output are stored in and retrieved from Vercel Blob.
+- Canvas snapshots and Markdown output are stored in and retrieved from Vercel Blob; the active canvas graph is read and edited in Liveblocks.
+- Canvas snapshots are written from current Liveblocks room storage using immutable Blob paths and a conditional project URL update; client autosave payloads are not authoritative.
+- AI runs record a completion marker in the room and use a per-project Trigger queue to avoid duplicate or overlapping AI edits.
 - The blob URL is stored in the database (`canvasJsonPath`, `filePath`) as the reference to the artifact.
 
 ## Auth and Collaboration Model

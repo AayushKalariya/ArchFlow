@@ -94,26 +94,35 @@ function LiveCursors() {
 
 interface CanvasFlowProps {
   projectId: string
+  onCanvasStateChange: (state: { ready: boolean; error: string | null }) => void
   pendingTemplate: PendingTemplate | null
   onTemplateDone: () => void
 }
 
-function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowProps) {
+function CanvasFlow({ projectId, onCanvasStateChange, pendingTemplate, onTemplateDone }: CanvasFlowProps) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, onDelete } =
     useLiveblocksFlow<CanvasNode, CanvasEdge>({ suspense: true })
 
   const { screenToFlowPosition, fitView } = useReactFlow()
   const updateMyPresence = useUpdateMyPresence()
-  const saveStatus = useCanvasAutosave(projectId, nodes, edges)
+  const [canvasReady, setCanvasReady] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const explicitImportRef = useRef(false)
+  const saveStatus = useCanvasAutosave(projectId, nodes, edges, canvasReady)
+
+  useEffect(() => {
+    onCanvasStateChange({ ready: canvasReady, error: loadError })
+  }, [canvasReady, loadError, onCanvasStateChange])
   const [aiStatus, setAiStatus] = useState<string | null>(null)
-  const [pendingAiFit, setPendingAiFit] = useState(false)
+  const pendingAiFit = useRef(false)
   const prevNodeCountRef = useRef(0)
 
   useEventListener(({ event }) => {
     if (event.type === "ai-status") {
       setAiStatus(event.status === "complete" || event.status === "error" ? null : event.message)
-      if (event.status === "complete") {
-        setPendingAiFit(true)
+      if (event.status === "complete" && event.fitView) {
+        pendingAiFit.current = true
         setTimeout(() => fitView({ duration: 400 }), 300)
       }
     }
@@ -122,11 +131,11 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
   // Reactive fitView: fires when nodes appear after an AI run completes,
   // covering the case where the storage delta arrives after the broadcastEvent.
   useEffect(() => {
-    if (!pendingAiFit) return
+    if (!pendingAiFit.current) return
     if (nodes.length === 0) return
     fitView({ duration: 400 })
-    setPendingAiFit(false)
-  }, [pendingAiFit, nodes.length, fitView])
+    pendingAiFit.current = false
+  }, [nodes.length, fitView])
 
   // Also fit when nodes jump from 0 to >0 during an active AI run (status message showing).
   useEffect(() => {
@@ -178,23 +187,50 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
     }
   }, [])
 
-  const roomLoaded = useRef(false)
-  useEffect(() => {
-    if (roomLoaded.current) return
-    roomLoaded.current = true
-    if (nodes.length > 0 || edges.length > 0) return
-
-    fetch(`/api/projects/${projectId}/canvas`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { canvas: { nodes: CanvasNode[]; edges: CanvasEdge[] } | null } | null) => {
-        if (!data?.canvas) return
-        importTemplate(data.canvas.nodes, data.canvas.edges)
-        setTimeout(() => fitView({ duration: 400 }), 150)
-      })
-      .catch(() => {})
-  // run once on mount — nodes/edges checked at that point reflect room storage state
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const restoreSnapshotIfEmpty = useMutation(({ storage }, snapshotNodes: CanvasNode[], snapshotEdges: CanvasEdge[]) => {
+    const flow = storage.get("flow")
+    const liveNodes = flow.get("nodes")
+    const liveEdges = flow.get("edges")
+    if (liveNodes.size > 0 || liveEdges.size > 0) return false
+    for (const node of snapshotNodes) liveNodes.set(node.id, new LiveObject(node as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveNodes.set>[1])
+    for (const edge of snapshotEdges) liveEdges.set(edge.id, new LiveObject(edge as unknown as ConstructorParameters<typeof LiveObject>[0]) as Parameters<typeof liveEdges.set>[1])
+    return true
   }, [])
+
+  useEffect(() => {
+    let canceled = false
+    if (nodes.length > 0 || edges.length > 0) {
+      queueMicrotask(() => {
+        if (!canceled) { setCanvasReady(true); setLoadError(null) }
+      })
+      return () => { canceled = true }
+    }
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}/canvas`)
+        if (!response.ok) throw new Error("Could not load the saved canvas. Retry to continue.")
+        const data: unknown = await response.json()
+        if (!data || typeof data !== "object" || !("canvas" in data)) throw new Error("Saved canvas response is invalid.")
+        const snapshot = data.canvas
+        if (snapshot !== null) {
+          if (!snapshot || typeof snapshot !== "object" || !("nodes" in snapshot) || !("edges" in snapshot)
+            || !Array.isArray(snapshot.nodes) || !Array.isArray(snapshot.edges)) {
+            throw new Error("Saved canvas is invalid. Retry or import a starter template.")
+          }
+          if (canceled) return
+          if (restoreSnapshotIfEmpty(snapshot.nodes as CanvasNode[], snapshot.edges as CanvasEdge[])) {
+            setTimeout(() => fitView({ duration: 400 }), 150)
+          }
+        }
+        if (!canceled) setCanvasReady(true)
+      } catch (error) {
+        if (!canceled && !explicitImportRef.current) setLoadError(error instanceof Error ? error.message : "Could not load the saved canvas.")
+      }
+    })()
+    return () => { canceled = true }
+  // Hydration is checked once per attempt; a live mutation rechecks the maps before importing.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, loadAttempt])
 
   const appliedStamp = useRef<number | null>(null)
   const onTemplateDoneRef = useRef(onTemplateDone)
@@ -203,7 +239,10 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
   useEffect(() => {
     if (!pendingTemplate || pendingTemplate.stamp === appliedStamp.current) return
     appliedStamp.current = pendingTemplate.stamp
+    explicitImportRef.current = true
     importTemplate(pendingTemplate.nodes, pendingTemplate.edges)
+    setLoadError(null)
+    setCanvasReady(true)
     setTimeout(() => fitView({ duration: 400 }), 150)
     onTemplateDoneRef.current()
   }, [pendingTemplate, importTemplate, fitView])
@@ -284,6 +323,11 @@ function CanvasFlow({ projectId, pendingTemplate, onTemplateDone }: CanvasFlowPr
       </Panel>
       <Panel position="top-left" className="mt-2 ml-2 flex flex-col gap-1">
         <SaveStatusChip status={saveStatus} />
+        {loadError && (
+          <button className="text-xs px-2 py-1 rounded-lg bg-bg-surface border border-state-error text-state-error" onClick={() => { setLoadError(null); setCanvasReady(false); setLoadAttempt((n) => n + 1) }}>
+            {loadError} Retry
+          </button>
+        )}
         {aiStatus && (
           <span className="text-xs font-medium px-2 py-1 rounded-lg bg-bg-surface border border-accent-ai/40 text-accent-ai-text animate-pulse">
             {aiStatus}
@@ -352,15 +396,16 @@ function SaveStatusChip({ status }: { status: SaveStatus }) {
 
 interface CanvasProps {
   projectId: string
+  onCanvasStateChange: (state: { ready: boolean; error: string | null }) => void
   pendingTemplate?: PendingTemplate | null
   onTemplateDone?: () => void
 }
 
-export function Canvas({ projectId, pendingTemplate = null, onTemplateDone = () => {} }: CanvasProps) {
+export function Canvas({ projectId, onCanvasStateChange, pendingTemplate = null, onTemplateDone = () => {} }: CanvasProps) {
   return (
     <div className="w-full h-full">
       <ReactFlowProvider>
-        <CanvasFlow projectId={projectId} pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
+        <CanvasFlow projectId={projectId} onCanvasStateChange={onCanvasStateChange} pendingTemplate={pendingTemplate} onTemplateDone={onTemplateDone} />
       </ReactFlowProvider>
     </div>
   )
