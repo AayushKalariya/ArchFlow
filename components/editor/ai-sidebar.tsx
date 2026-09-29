@@ -749,7 +749,7 @@ export function AiSidebar({ isOpen, onClose, projectId, roomId }: AiSidebarProps
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-text-primary leading-none">AI Workspace</p>
           <p className="text-xs text-text-muted mt-1">
-            {isRunning ? "AI is working…" : "Collaborate with Ghost AI"}
+            {isRunning ? "AI is working…" : "Collaborate with Spec AI"}
           </p>
         </div>
         <Button
