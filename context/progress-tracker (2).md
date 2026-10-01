@@ -97,6 +97,7 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Session Notes
 
+- Dev server verification (2026-09-29): Replaced deprecated Clerk `createRouteMatcher` in `proxy.ts` with exact public-path checks while retaining `auth.protect()` for other routes. Updated the ignored local `.env` database SSL mode from `require` to its current equivalent, `verify-full`, to eliminate the PostgreSQL driver warning. `npm run dev` starts cleanly; the signed-in editor and canvas load without an error overlay; `/sign-in` returns 200; TypeScript, focused ESLint, and `git diff --check` pass.
 - Next.js 16.3.3, React 19, Tailwind v4. Components live in components/ui/. TooltipProvider wraps children in app/layout.tsx.
 - Editor moved from `app/page.tsx` to `app/editor/page.tsx`.
 - Prisma v8 is a Platform CLI — no `migrate dev` or `generate` commands. Uses `prisma contract emit` + `prisma db init`.
